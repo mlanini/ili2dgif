@@ -39,7 +39,7 @@ This project implements an **automated pipeline** to transform the UML model of 
 
 ## What is INTERLIS?
 
-**INTERLIS** is a Swiss federal standard (SN 612030 / eCH-0031) for describing and exchanging geospatial data models and transfer datasets. It was developed by the Swiss Federal Directorate of Cadastral Surveying and has been legally mandated for official geodata in Switzerland since [2008 Geospatial Information Act](https://www.fedlex.admin.ch/eli/cc/2008/388/en).
+**INTERLIS** is a Swiss federal standard (SN 612030 / eCH-0031) for describing and exchanging geospatial data models and transfer datasets. It was developed by the Swiss Federal Directorate of Cadastral Surveying and has been legally mandated for official geodata in Switzerland since 2008 [Geospatial Information Act](https://www.fedlex.admin.ch/eli/cc/2008/388/en).
 
 ### Key characteristics
 
@@ -62,7 +62,7 @@ This project implements an **automated pipeline** to transform the UML model of 
 
 ### Why INTERLIS in this project?
 
-The DGIF 3.0 UML model (673 classes, 64 associations) is transformed into INTERLIS 2.4 to:
+The Defence Geospatial Information Model 3.0 (673 classes, 64 associations) is transformed into INTERLIS 2.4 to:
 - Leverage the Swiss geospatial infrastructure and model repositories
 - Enable automatic generation of GeoPackage, PostGIS and XTF transfer files
 - Validate the data model formally with `ili2c` (0 errors achieved)
@@ -181,7 +181,7 @@ python scripts/generate_gpkg.py
 
 Updates the mapping table between OpenStreetMap tags and DGIF classes from version 2.0 to version 3.0, based on three sources:
 
-1. **V2 CSV** (`dgiwg_docs/OSM_to_DGIF_V2.csv`) — 1,610 rows, 26 OSM categories
+1. **V2 CSV** (`models/OSM_to_DGIF_V2.csv`) — 1,610 rows, 26 OSM categories
 2. **INTERLIS V3 model** (`models/DGIF_V3.ili`) — 673 classes in 21 topics
 3. **OSM wiki Map_features** — current state of OSM tags
 
@@ -249,7 +249,7 @@ python scripts/build_osm_dgif_v3.py
 
 **Input:** swissTLM3D INTERLIS model (`models/swissTLM3D_ili2_V2_4.ili`) and `models/DGIF_V3.ili`.
 
-**Output:** `dgiwg_docs/swissTLM3D_to_DGIF_V3.csv` — 215 rows, 93 distinct DGIF classes, 0 errors.
+**Output:** `models/swissTLM3D_to_DGIF_V3.csv` — 215 rows, 93 distinct DGIF classes, 0 errors.
 
 **Approach:**
 
