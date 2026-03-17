@@ -247,6 +247,15 @@ GEOMETRY_ATTR_NAME_MAP = {
     "multiSolidGeometry":   "Coord3",          # MultiSolidGeometryInfo  (GM_MultiSolid → 3-D fallback)
 }
 
+# ── Angle attribute-name pattern ───────────────────────────────────────────
+# Attributes whose name contains "Angle" represent angular measurements in
+# degrees.  The DGIF conceptual model defines them as Units.Angle_Degree with
+# range 0.00..360.00.  "AngleAcc" attributes represent accuracy of an angle
+# (e.g. ILS glide-path angle accuracy) — same unit, same range.
+# We match by regex so new attributes are automatically handled.
+ANGLE_ATTR_PATTERN = re.compile(r'[Aa]ngle', re.IGNORECASE)
+ANGLE_ILI_TYPE = "0.000 .. 360.000 [Units.Angle_Degree]"
+
 
 def resolve_interlis_type(type_id, id_name_map, local_enums, id_elem_map,
                           attr_name=None):
@@ -260,7 +269,16 @@ def resolve_interlis_type(type_id, id_name_map, local_enums, id_elem_map,
         # Type ID not resolved – check if it's a known geometry attribute name
         if attr_name and attr_name in GEOMETRY_ATTR_NAME_MAP:
             return (GEOMETRY_ATTR_NAME_MAP[attr_name], False, None)
+        # Check if it's an Angle attribute by name pattern
+        if attr_name and ANGLE_ATTR_PATTERN.search(attr_name):
+            return (ANGLE_ILI_TYPE, False, None)
         return ("TEXT*255", False, None)
+    
+    # 0) Angle attributes: if the attribute name matches the Angle pattern,
+    #    override whatever the DataType says (typically Real/RealNonNegative)
+    #    with the proper Units.Angle_Degree range.
+    if attr_name and ANGLE_ATTR_PATTERN.search(attr_name):
+        return (ANGLE_ILI_TYPE, False, None)
     
     # 1) Check direct mapping
     if type_name in INTERLIS_TYPE_MAP:
@@ -723,36 +741,19 @@ def write_class(w, cls_info, id_name_map, id_elem_map, local_enums,
         # Determine MANDATORY
         mandatory = " MANDATORY" if lower != "0" and not is_extended else ""
         
-        # Multi-valued: BAG or LIST
-        if upper == "*" or (upper.isdigit() and int(upper) > 1):
-            if is_enum and enum_elem is not None:
-                literals = extract_enumeration_literals(enum_elem)
-                if literals:
-                    enum_str = ",\n".join(
-                        ["  " * (w.indent + 2) + lit for lit in literals])
-                    w.write(f"{attr_name}{extended_tag} : BAG OF (")
-                    for lit in literals:
-                        w.write(f"  {lit},")
-                    # Remove trailing comma from last
-                    if w.lines and w.lines[-1].endswith(","):
-                        w.lines[-1] = w.lines[-1][:-1]
-                    w.write(f");")
-                else:
-                    w.write(f"{attr_name}{extended_tag} : BAG OF TEXT*255;")
+        # Flattened model: multi-valued attributes (BAG OF) are collapsed to
+        # single-valued.  This avoids ili2gpkg issues with BAG OF on a flat
+        # GeoPackage schema and simplifies downstream ETL processing.
+        if is_enum and enum_elem is not None:
+            literals = extract_enumeration_literals(enum_elem)
+            if literals:
+                enum_inline = "(" + ", ".join(literals) + ")"
+                w.write(f"{attr_name}{extended_tag} :{mandatory} {enum_inline};")
             else:
-                type_str = ili_type if ili_type else "TEXT*255"
-                w.write(f"{attr_name}{extended_tag} : BAG OF {type_str};")
+                w.write(f"{attr_name}{extended_tag} :{mandatory} TEXT*255;")
         else:
-            if is_enum and enum_elem is not None:
-                literals = extract_enumeration_literals(enum_elem)
-                if literals:
-                    enum_inline = "(" + ", ".join(literals) + ")"
-                    w.write(f"{attr_name}{extended_tag} :{mandatory} {enum_inline};")
-                else:
-                    w.write(f"{attr_name}{extended_tag} :{mandatory} TEXT*255;")
-            else:
-                type_str = ili_type if ili_type else "TEXT*255"
-                w.write(f"{attr_name}{extended_tag} :{mandatory} {type_str};")
+            type_str = ili_type if ili_type else "TEXT*255"
+            w.write(f"{attr_name}{extended_tag} :{mandatory} {type_str};")
     
     # Write association-end attributes as references
     for assoc_attr in cls_info["assoc_attrs"]:
@@ -781,31 +782,16 @@ def write_class(w, cls_info, id_name_map, id_elem_map, local_enums,
                     else:
                         # Target topic not yet defined -> cannot reference
                         # Emit as INTERLIS comment (forward ref not allowed)
-                        lower = assoc_attr["lower"]
-                        upper = assoc_attr["upper"]
-                        if upper == "*" or (upper.isdigit() and int(upper) > 1):
-                            w.write(f"!! {attr_name} : BAG OF REFERENCE TO (EXTERNAL) {model_name}.{target_topic}.{target_safe};  !! forward reference - topic {target_topic} not yet defined")
-                        else:
-                            w.write(f"!! {attr_name} : REFERENCE TO (EXTERNAL) {model_name}.{target_topic}.{target_safe};  !! forward reference - topic {target_topic} not yet defined")
+                        w.write(f"!! {attr_name} : REFERENCE TO (EXTERNAL) {model_name}.{target_topic}.{target_safe};  !! forward reference - topic {target_topic} not yet defined")
                         continue
                 elif target_topic == current_topic:
                     # Intra-topic: check if target class is already emitted
                     if target_safe not in emitted_class_names and target_safe != name:
-                        lower = assoc_attr["lower"]
-                        upper = assoc_attr["upper"]
-                        if upper == "*" or (upper.isdigit() and int(upper) > 1):
-                            w.write(f"!! {attr_name} : BAG OF REFERENCE TO {target_safe};  !! forward reference - class {target_safe} not yet defined in this topic")
-                        else:
-                            w.write(f"!! {attr_name} : REFERENCE TO {target_safe};  !! forward reference - class {target_safe} not yet defined in this topic")
+                        w.write(f"!! {attr_name} : REFERENCE TO {target_safe};  !! forward reference - class {target_safe} not yet defined in this topic")
                         continue
             # INTERLIS 2.4 §2.6.3: cross-topic REFERENCE TO requires (EXTERNAL)
             ext_kw = " (EXTERNAL)" if is_cross_topic else ""
-            lower = assoc_attr["lower"]
-            upper = assoc_attr["upper"]
-            if upper == "*" or (upper.isdigit() and int(upper) > 1):
-                w.write(f"{attr_name} : BAG OF REFERENCE TO{ext_kw} {target_safe};")
-            else:
-                w.write(f"{attr_name} : REFERENCE TO{ext_kw} {target_safe};")
+            w.write(f"{attr_name} : REFERENCE TO{ext_kw} {target_safe};")
     
     w.dec()
     w.write(f"END {name};")

@@ -16,9 +16,9 @@ Prerequisites:
   - Python 3.12 with GDAL/OGR (QGIS bundled)
   - ili2gpkg 5.5.1 in ressources/ili2gpkg-5.5.1/
   - ilivalidator 1.15.0 in ressources/ilivalidator-1.15.0/
-  - DGIF_V3.ili in output/
-  - swissTLM3D_ili2_V2_3.ili in ressources/
-  - swissTLM3D_to_DGIF_V3.csv in dgiwg_docs/
+  - DGIF_V3.ili in models/
+  - swissTLM3D_ili2_V2_4.ili in models/
+  - swissTLM3D_to_DGIF_V3.csv in models/
 """
 
 import argparse
@@ -124,6 +124,7 @@ def run_java(args: list[str], label: str) -> int:
         encoding="utf-8",
         errors="replace",
     )
+    assert proc.stdout is not None
     for line in proc.stdout:
         print(f"  {GREY}{line.rstrip()}{RESET}")
     proc.wait()
@@ -168,6 +169,11 @@ def main() -> int:
         help="Skip extraction if xtf/ directory already exists with .xtf files",
     )
     parser.add_argument(
+        "--skip-import",
+        action="store_true",
+        help="Skip XTF→GeoPackage import (Phase 4) if swisstlm3d_temp.gpkg already exists",
+    )
+    parser.add_argument(
         "--python",
         default=sys.executable,
         help="Path to Python interpreter with GDAL (default: current interpreter)",
@@ -180,9 +186,9 @@ def main() -> int:
     workspace_root = Path(__file__).resolve().parent.parent
     ili2gpkg_jar = workspace_root / "ressources" / "ili2gpkg-5.5.1" / "ili2gpkg-5.5.1.jar"
     ilivalidator_jar = workspace_root / "ressources" / "ilivalidator-1.15.0" / "ilivalidator-1.15.0.jar"
-    dgif_ili = workspace_root / "output" / "DGIF_V3.ili"
-    tlm_ili = workspace_root / "ressources" / "swissTLM3D_ili2_V2_3.ili"
-    mapping_csv = workspace_root / "dgiwg_docs" / "swissTLM3D_to_DGIF_V3.csv"
+    dgif_ili = workspace_root / "models" / "DGIF_V3.ili"
+    tlm_ili = workspace_root / "models" / "swissTLM3D_ili2_V2_4.ili"
+    mapping_csv = workspace_root / "models" / "swissTLM3D_to_DGIF_V3.csv"
     transform_py = workspace_root / "scripts" / "etl_swisstlm3d_transform.py"
     python_exe = args.python
 
@@ -194,7 +200,8 @@ def main() -> int:
     tlm_gpkg = tmp_dir / "swisstlm3d_temp.gpkg"
 
     # Model directories (semicolon-separated, as expected by ili2gpkg / ilivalidator)
-    dgif_model_dir = f"{output_dir};http://models.interlis.ch/;%JAR_DIR"
+    models_dir = workspace_root / "models"
+    dgif_model_dir = f"{models_dir};http://models.interlis.ch/;%JAR_DIR"
     # tlm_model_dir is set after Phase 2 (includes the xtf/ directory where
     # the model .ili shipped with the data resides)
 
@@ -444,59 +451,26 @@ def main() -> int:
     # ========================================================================
     banner("Phase 4: Import XTF into temp GeoPackage")
 
-    if tlm_gpkg.exists():
-        info(f"Removing existing: {tlm_gpkg}")
-        tlm_gpkg.unlink()
+    if args.skip_import and tlm_gpkg.exists():
+        skip(f"Using existing TLM GeoPackage: {tlm_gpkg} ({file_size_mb(tlm_gpkg)} MB)")
+    else:
+        if tlm_gpkg.exists():
+            info(f"Removing existing: {tlm_gpkg}")
+            tlm_gpkg.unlink()
 
-    # 4a — Schema import: create the TLM GeoPackage structure from the .ili
-    #      shipped with the data (found in xtf_dir)
-    tlm_ili_file = list(xtf_dir.glob("*.ili"))
-    if not tlm_ili_file:
-        error(f"No .ili model file found in {xtf_dir}")
-        return 1
-    tlm_ili_file = tlm_ili_file[0]
-    info(f"TLM model: {tlm_ili_file.name}")
+        # 4a — Schema import: create the TLM GeoPackage structure from the .ili
+        #      shipped with the data (found in xtf_dir)
+        tlm_ili_file = list(xtf_dir.glob("*.ili"))
+        if not tlm_ili_file:
+            error(f"No .ili model file found in {xtf_dir}")
+            return 1
+        tlm_ili_file = tlm_ili_file[0]
+        info(f"TLM model: {tlm_ili_file.name}")
 
-    tlm_schema_log = tmp_dir / "tlm_schemaimport.log"
-    tlm_schema_args = [
-        "-jar", str(ili2gpkg_jar),
-        "--schemaimport",
-        "--dbfile", str(tlm_gpkg),
-        "--defaultSrsAuth", "EPSG",
-        "--defaultSrsCode", "2056",
-        "--nameByTopic",
-        "--strokeArcs",
-        "--createEnumTabs",
-        "--createEnumTxtCol",
-        "--beautifyEnumDispName",
-        "--createBasketCol",
-        "--createTidCol",
-        "--createStdCols",
-        "--modeldir", tlm_model_dir,
-        "--log", str(tlm_schema_log),
-        str(tlm_ili_file),
-    ]
-
-    t0 = time.perf_counter()
-    rc = run_java(tlm_schema_args, "ili2gpkg --schemaimport for TLM...")
-    if rc != 0:
-        error(f"TLM schema import failed! See: {tlm_schema_log}")
-        return 1
-    elapsed = time.perf_counter() - t0
-    ok(f"TLM GeoPackage schema created in {elapsed:.1f}s")
-
-    # 4b — Import each XTF file into the existing schema
-    info(f"Importing {len(xtf_files)} XTF file(s) into temp GeoPackage...")
-    warn("This may take a long time for large datasets.")
-    t0_total = time.perf_counter()
-
-    for i, xf in enumerate(xtf_files, 1):
-        info(f"[{i}/{len(xtf_files)}] Importing {xf.name} ({file_size_mb(xf)} MB)...")
-        per_file_log = tmp_dir / f"tlm_import_{xf.stem}.log"
-
-        tlm_import_args = [
+        tlm_schema_log = tmp_dir / "tlm_schemaimport.log"
+        tlm_schema_args = [
             "-jar", str(ili2gpkg_jar),
-            "--import",
+            "--schemaimport",
             "--dbfile", str(tlm_gpkg),
             "--defaultSrsAuth", "EPSG",
             "--defaultSrsCode", "2056",
@@ -509,21 +483,57 @@ def main() -> int:
             "--createTidCol",
             "--createStdCols",
             "--modeldir", tlm_model_dir,
-            "--log", str(per_file_log),
-            str(xf),
+            "--log", str(tlm_schema_log),
+            str(tlm_ili_file),
         ]
 
         t0 = time.perf_counter()
-        rc = run_java(tlm_import_args, f"ili2gpkg --import {xf.name}")
-        elapsed = time.perf_counter() - t0
-
+        rc = run_java(tlm_schema_args, "ili2gpkg --schemaimport for TLM...")
         if rc != 0:
-            error(f"Import of {xf.name} failed! See: {per_file_log}")
+            error(f"TLM schema import failed! See: {tlm_schema_log}")
             return 1
-        ok(f"{xf.name} imported in {elapsed:.1f}s")
+        elapsed = time.perf_counter() - t0
+        ok(f"TLM GeoPackage schema created in {elapsed:.1f}s")
 
-    total_elapsed = time.perf_counter() - t0_total
-    ok(f"TLM GeoPackage created: {file_size_mb(tlm_gpkg)} MB in {total_elapsed:.1f}s")
+        # 4b — Import each XTF file into the existing schema
+        info(f"Importing {len(xtf_files)} XTF file(s) into temp GeoPackage...")
+        warn("This may take a long time for large datasets.")
+        t0_total = time.perf_counter()
+
+        for i, xf in enumerate(xtf_files, 1):
+            info(f"[{i}/{len(xtf_files)}] Importing {xf.name} ({file_size_mb(xf)} MB)...")
+            per_file_log = tmp_dir / f"tlm_import_{xf.stem}.log"
+
+            tlm_import_args = [
+                "-jar", str(ili2gpkg_jar),
+                "--import",
+                "--dbfile", str(tlm_gpkg),
+                "--defaultSrsAuth", "EPSG",
+                "--defaultSrsCode", "2056",
+                "--nameByTopic",
+                "--strokeArcs",
+                "--createEnumTabs",
+                "--createEnumTxtCol",
+                "--beautifyEnumDispName",
+                "--createBasketCol",
+                "--createTidCol",
+                "--createStdCols",
+                "--modeldir", tlm_model_dir,
+                "--log", str(per_file_log),
+                str(xf),
+            ]
+
+            t0 = time.perf_counter()
+            rc = run_java(tlm_import_args, f"ili2gpkg --import {xf.name}")
+            elapsed = time.perf_counter() - t0
+
+            if rc != 0:
+                error(f"Import of {xf.name} failed! See: {per_file_log}")
+                return 1
+            ok(f"{xf.name} imported in {elapsed:.1f}s")
+
+        total_elapsed = time.perf_counter() - t0_total
+        ok(f"TLM GeoPackage created: {file_size_mb(tlm_gpkg)} MB in {total_elapsed:.1f}s")
     print()
 
     # ========================================================================
@@ -548,6 +558,7 @@ def main() -> int:
         encoding="utf-8",
         errors="replace",
     )
+    assert proc.stdout is not None
     for line in proc.stdout:
         print(f"  {line.rstrip()}")
     proc.wait()
