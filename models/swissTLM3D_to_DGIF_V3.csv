@@ -146,10 +146,10 @@
 145;TLM_NAMEN;TLM_SIEDLUNGSNAME;Objektart;Ortsteil;Polygon;Generalization;PopulatedPlace;AL105;;;;;;;;
 146;TLM_NAMEN;TLM_SIEDLUNGSNAME;Objektart;Quartier;Polygon;Generalization;Neighbourhood;AL106;;;;;;;;
 147;TLM_NAMEN;TLM_SIEDLUNGSNAME;Objektart;Quartierteil;Polygon;Generalization;Neighbourhood;AL106;;;;;;;;
-148;TLM_OEV;TLM_EISENBAHN;Objektart;Kleinbahn;Line;Generalization;Railway;AN010;gaugeConfiguration;GAW;narrowGauge;2;;;;
-149;TLM_OEV;TLM_EISENBAHN;Objektart;Normalspur;Line;OK;Railway;AN010;gaugeConfiguration;GAW;standardGauge;1;;;;
-150;TLM_OEV;TLM_EISENBAHN;Objektart;Schmalspur;Line;OK;Railway;AN010;gaugeConfiguration;GAW;narrowGauge;2;;;;
-151;TLM_OEV;TLM_EISENBAHN;Objektart;Schmalspur_mit_Normalspur;Line;Generalization;Railway;AN010;gaugeConfiguration;GAW;mixedGauge;4;;;;
+148;TLM_OEV;TLM_EISENBAHN;Objektart;Kleinbahn;Line;Generalization;Railway;AN010;railwayClass;RWC;branchLine;2;;;;
+149;TLM_OEV;TLM_EISENBAHN;Objektart;Normalspur;Line;OK;Railway;AN010;railwayClass;RWC;mainLine;1;;;;
+150;TLM_OEV;TLM_EISENBAHN;Objektart;Schmalspur;Line;OK;Railway;AN010;railwayClass;RWC;branchLine;2;;;;
+151;TLM_OEV;TLM_EISENBAHN;Objektart;Schmalspur_mit_Normalspur;Line;Generalization;Railway;AN010;railwayClass;RWC;mainLine;4;;;;
 152;TLM_OEV;TLM_HALTESTELLE;Objektart;Haltestelle_Bahn;Point;OK;TransportationStation;AQ125;meansTransportation;TME;railway;3;;;;
 153;TLM_OEV;TLM_HALTESTELLE;Objektart;Haltestelle_Bus;Point;Generalization;TransportationStation;AQ125;meansTransportation;TME;bus;5;;;;
 154;TLM_OEV;TLM_HALTESTELLE;Objektart;Haltestelle_Schiff;Point;OK;Harbour;BB005;;;;;;;;
@@ -169,8 +169,8 @@
 168;TLM_STRASSEN;TLM_AUS_EINFAHRT;Objektart;Einfahrt;Point;Generalization;RoadInterchange;AQ111;;;;;;;;
 169;TLM_STRASSEN;TLM_AUS_EINFAHRT;Objektart;Ein_und_Ausfahrt;Point;Generalization;RoadInterchange;AQ111;;;;;;;;
 170;TLM_STRASSEN;TLM_STRASSE;Objektart;Ausfahrt;Line;Generalization;LandTransportationWay;AP030;;;;;;;;
-171;TLM_STRASSEN;TLM_STRASSE;Objektart;Autobahn;Line;OK;LandTransportationWay;AP030;roadCharacteristics;RCH;motorway;1;;;;
-172;TLM_STRASSEN;TLM_STRASSE;Objektart;Autostrasse;Line;Generalization;LandTransportationWay;AP030;roadCharacteristics;RCH;motorway;1;;;;
+171;TLM_STRASSEN;TLM_STRASSE;Objektart;Autobahn;Line;OK;LandTransportationWay;AP030;waySignificance;WSI;primaryWay;1;;;;
+172;TLM_STRASSEN;TLM_STRASSE;Objektart;Autostrasse;Line;Generalization;LandTransportationWay;AP030;waySignificance;WSI;primaryWay;1;;;;
 173;TLM_STRASSEN;TLM_STRASSE;Objektart;Autozug;Line;Generalization;FerryCrossing;AQ070;;;;;;;;
 174;TLM_STRASSEN;TLM_STRASSE;Objektart;Dienstzufahrt;Line;Generalization;LandTransportationWay;AP030;;;;;;;;
 175;TLM_STRASSEN;TLM_STRASSE;Objektart;Einfahrt;Line;Generalization;LandTransportationWay;AP030;;;;;;;;

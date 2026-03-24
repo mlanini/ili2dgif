@@ -372,46 +372,6 @@ def extract_centroid_coord2(geom: ogr.Geometry, transform: osr.CoordinateTransfo
 
 
 # ============================================================================
-# Insert feature into DGIF table via sqlite3
-# ============================================================================
-def insert_feature(
-    conn: sqlite3.Connection,
-    dgif_table: str,
-    dgif_columns: set[str],
-    feature_data: dict,
-    geom_wkb: bytes | None,
-):
-    """
-    Insert a row into the DGIF GeoPackage table.
-    feature_data keys are lowercase column names.
-    """
-    cols = []
-    vals = []
-
-    for col, val in feature_data.items():
-        col_lower = col.lower()
-        if col_lower in dgif_columns:
-            cols.append(f'"{col}"')
-            vals.append(val)
-
-    if geom_wkb is not None and "geometry" in dgif_columns:
-        cols.append('"geometry"')
-        vals.append(geom_wkb)
-
-    if not cols:
-        return False
-
-    placeholders = ", ".join(["?"] * len(vals))
-    sql = f'INSERT INTO "{dgif_table}" ({", ".join(cols)}) VALUES ({placeholders})'
-    try:
-        conn.execute(sql, vals)
-        return True
-    except sqlite3.Error as e:
-        # Silently skip constraint errors (e.g. unique violations)
-        return False
-
-
-# ============================================================================
 # Build GPKG-compatible WKB (little-endian header with SRS ID)
 # ============================================================================
 def to_gpkg_wkb(geom: ogr.Geometry, srs_id: int = 4326) -> bytes:
@@ -1000,7 +960,12 @@ def transform(
                 # Generate identifiers
                 ili_tid = src_tid if src_tid else str(uuid.uuid4())
                 entity_uuid = ili_tid
-                begin_date = src_datum if src_datum else now_iso
+                # Normalise date to ISO 8601 (YYYY-MM-DD); source may use
+                # YYYY/MM/DD or other separators.
+                if src_datum:
+                    begin_date = src_datum.replace("/", "-")
+                else:
+                    begin_date = now_iso
 
                 # --- Geometry ---
                 # With --smart2Inheritance each concrete class table has its
